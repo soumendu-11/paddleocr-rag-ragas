@@ -164,6 +164,34 @@ Text blocks + bounding boxes
 
 ---
 
+## Retrievers & Reranker
+
+All three stages are wired together in [codes/rag_pipeline.py](codes/rag_pipeline.py).
+
+### Retrievers (hybrid, two-stage)
+
+| Stage | Component | Model / Algorithm | Top-k | Location |
+|---|---|---|---|---|
+| Keyword | `BM25Retriever` (from `langchain_community.retrievers.bm25`) | BM25 — lexical, no ML model | 5 | [codes/rag_pipeline.py:81-82](codes/rag_pipeline.py#L81-L82) |
+| Semantic | `DocArrayInMemorySearch` + `HuggingFaceEmbeddings` | **`sentence-transformers/all-MiniLM-L6-v2`** (384-dim, local) | 5 | [codes/rag_pipeline.py:75-84](codes/rag_pipeline.py#L75-L84) |
+| Ensemble | `SimpleEnsembleRetriever` (custom, [codes/rag_pipeline.py:22-35](codes/rag_pipeline.py#L22-L35)) | Concatenate BM25 + vector results, deduplicate by `page_content`, take first 10 | 10 | [codes/rag_pipeline.py:86-89](codes/rag_pipeline.py#L86-L89) |
+
+> **Note:** Despite the `weights=[0.5, 0.5]` argument accepted by `SimpleEnsembleRetriever`, the current implementation does **not** perform weighted score fusion — it simply unions the two result sets in order and deduplicates.
+
+### Reranker
+
+| Component | Model | Top-n | Location |
+|---|---|---|---|
+| `RerankRetriever` (custom, [codes/rag_pipeline.py:38-48](codes/rag_pipeline.py#L38-L48)) | **`cross-encoder/ms-marco-MiniLM-L-6-v2`** via `sentence_transformers.CrossEncoder` | 3 | [codes/rag_pipeline.py:91-98](codes/rag_pipeline.py#L91-L98) |
+
+The cross-encoder scores each `(query, candidate)` pair jointly, sorts the 10 ensemble results by descending score, and returns the top 3 — which are then passed as context to GPT-4o.
+
+### Embedding reuse in evaluation
+
+The same `sentence-transformers/all-MiniLM-L6-v2` model is loaded a second time inside the RAGAS evaluator ([codes/ragas_eval.py:96-98](codes/ragas_eval.py#L96-L98)) to compute the **Answer Relevancy** metric locally — no separate Azure embedding deployment is required.
+
+---
+
 ## Chunking Strategy
 
 Chunks are built from **OCR layout geometry**, not from a text splitter — no `RecursiveCharacterTextSplitter`, no token- or character-based splitting is applied.
