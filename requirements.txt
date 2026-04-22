@@ -1,0 +1,38 @@
+# ── OCR ───────────────────────────────────────────────────────────────────────
+paddlepaddle==3.3.1
+paddleocr==3.5.0
+
+# ── PDF rendering ─────────────────────────────────────────────────────────────
+PyMuPDF==1.25.1
+
+# ── LangChain stack (0.3.x series — required by nlp1 env) ───────────────────
+langchain==0.3.25
+langchain-community==0.3.8
+langchain-core==0.3.63
+langchain-huggingface==0.1.2
+langchain-openai==0.2.12
+langchain-text-splitters==0.3.8
+
+# ── Embeddings & reranking ────────────────────────────────────────────────────
+sentence-transformers==4.1.0
+
+# ── Azure / OpenAI client ─────────────────────────────────────────────────────
+openai==1.109.1
+
+# ── RAGAS evaluation ──────────────────────────────────────────────────────────
+ragas==0.2.15
+datasets==2.12.0
+
+# ── Data & visualisation ──────────────────────────────────────────────────────
+pandas==2.2.3
+numpy==1.26.4
+matplotlib==3.7.2
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1
+
+# ── urllib3 pinned to 1.x ─────────────────────────────────────────────────────
+# botocore 1.29.76 (pinned by aiobotocore in this env) requires urllib3 < 2.
+# The DEFAULT_CIPHERS symbol was removed in urllib3 2.0, breaking botocore
+# at import time, which breaks datasets and ragas.
+urllib3<2
