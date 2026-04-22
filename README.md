@@ -164,6 +164,36 @@ Text blocks + bounding boxes
 
 ---
 
+## Chunking Strategy
+
+Chunks are built from **OCR layout geometry**, not from a text splitter — no `RecursiveCharacterTextSplitter`, no token- or character-based splitting is applied.
+
+The pipeline (`group_lines_into_blocks` in [codes/ocr_pipeline.py](codes/ocr_pipeline.py)):
+
+1. PaddleOCR returns a list of `(polygon, text, confidence)` tuples per page — one per detected text line.
+2. Lines are sorted by top-Y coordinate.
+3. Consecutive lines are merged into the same block **as long as the vertical gap between them is ≤ `gap_threshold` pixels** (default `20` at `dpi=200`). Any larger gap starts a new block.
+4. Each block becomes one LangChain `Document`, with `page_content = " ".join(lines)` and metadata `{page, bboxes, source}`.
+
+### Properties
+
+| Property | Value |
+|---|---|
+| Chunk unit | A visually contiguous paragraph block on a single page |
+| Split signal | Vertical whitespace `>` `gap_threshold` pixels |
+| Line joiner | Single space (newlines are not preserved) |
+| Size cap | None — a tall block with no internal gaps becomes one chunk |
+| Overlap | None |
+| Cross-page chunks | Never — each page is grouped independently |
+
+### Tuning
+
+- `gap_threshold` is **pixel-based and DPI-dependent**. It's calibrated against `dpi=200`; if you render at a different DPI, scale the threshold proportionally (e.g. double the DPI → double the threshold) or the pipeline will over-split.
+- Headings sitting tightly above their body paragraph will be **absorbed into the same block** (good for retrieval context, but means a heading cannot be retrieved on its own).
+- Multi-column layouts and tables are grouped purely by vertical proximity — column-aware splitting is not performed.
+
+---
+
 ## Evaluation Metrics
 
 | Metric | What it measures | Range |
