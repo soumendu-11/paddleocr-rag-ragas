@@ -220,6 +220,35 @@ The pipeline (`group_lines_into_blocks` in [codes/ocr_pipeline.py](codes/ocr_pip
 - Headings sitting tightly above their body paragraph will be **absorbed into the same block** (good for retrieval context, but means a heading cannot be retrieved on its own).
 - Multi-column layouts and tables are grouped purely by vertical proximity — column-aware splitting is not performed.
 
+### Applying a custom chunking strategy
+
+If you layer your own splitter on top of the OCR blocks (e.g. `RecursiveCharacterTextSplitter`, `SemanticChunker`, or any LangChain splitter), be aware of how it interacts with the bounding-box metadata:
+
+```python
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+documents, page_images = extract_documents_from_pdf("document/RAGAS.pdf")
+splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+smaller_docs = splitter.split_documents(documents)
+```
+
+**What is preserved:** LangChain splitters deep-copy the parent `Document`'s metadata onto every child chunk, so `page`, `source`, and `bboxes` still ride through retrieval → CSV → visualisation. Nothing crashes.
+
+**What is silently lost:** `bboxes` is a list of polygon point-lists — one polygon per **original OCR line** inside the parent block. The joined `page_content` has no character-offset back-pointer to those lines (lines are concatenated with a single space in [`group_lines_into_blocks`](codes/ocr_pipeline.py), offset information is discarded). When the splitter cuts the text, it has no basis to prune the polygon list, so **every child chunk inherits the full parent's polygons**. Two sub-chunks from the same block end up with *different text* but *identical bboxes*.
+
+In the visualisation, this shows up as **over-highlighting**: a retrieved half-block will paint boxes over the *entire* original block.
+
+**Options if you need smaller chunks:**
+
+| Option | Approach | Bbox fidelity | Code change |
+|---|---|---|---|
+| A | Lower `gap_threshold` in `extract_documents_from_pdf` (e.g. `gap_threshold=5`, or `0` for one chunk per OCR line) | ✅ Exact | None — just a parameter |
+| B | Apply a standard LangChain splitter and accept page-level (not region-level) traceability | ⚠️ Diluted — highlights the parent block | None |
+| C | Write a bbox-aware splitter that threads per-line character offsets through `group_lines_into_blocks` and only keeps polygons whose offsets fall in the sub-chunk's range | ✅ Exact | Moderate — modify `ocr_pipeline.py` to emit offsets and add a custom splitter |
+| D | Semantic / embedding-based splitters (e.g. `SemanticChunker`) operating on the joined text | ⚠️ Same dilution as B | None |
+
+For most use cases **Option A** is the cheapest way to keep bboxes precise while shrinking chunks. Option C is only worth the effort if you need small chunks *and* sentence-level region highlighting.
+
 ---
 
 ## Evaluation Metrics
